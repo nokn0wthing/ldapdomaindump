@@ -342,9 +342,12 @@ class domainDumper():
     #This is used for getting the primary group of a user
     def mapGroupsIdsToDns(self):
         dnmap = {}
-        for group in self.groups:
-            gid = int(group.objectSid.value.split('-')[-1])
-            dnmap[gid] = group.distinguishedName.values[0]
+        for i, group in enumerate(self.groups):
+            try:
+                gid = int(group.objectSid.value.split('-')[-1])
+                dnmap[gid] = group.distinguishedName.values[0]
+            except:
+                dnmap[i] = "NOT FOUND!"
         self.groups_dnmap = dnmap
         return dnmap
 
@@ -454,14 +457,14 @@ class reportWriter():
         if isinstance(length, timedelta):
             return length.total_seconds() / 86400
         else:
-            return abs(length) * .0000001 / 86400
+            return abs(int(length)) * .0000001 / 86400
 
     def nsToMinutes(self, length):
         # ldap3 >= 2.6 returns timedelta
         if isinstance(length, timedelta):
             return length.total_seconds() / 60
         else:
-            return abs(length) * .0000001 / 60
+            return abs(int(length)) * .0000001 / 60
 
     #Parse bitwise flags into a list
     def parseFlags(self, attr, flags_def):
@@ -585,7 +588,10 @@ class reportWriter():
                 return '0'
         # Make sure it's a unicode string
         if type(value) is bytes:
-            return value.encode('utf8')
+            try:
+                return value.encode('utf8')
+            except:
+                return 'NOT FOUND!'
         if type(value) is str:
             return value#.encode('utf8')
         if type(value) is int:
@@ -634,7 +640,10 @@ class reportWriter():
         if aname == 'lockoutobservationwindow' or  aname == 'lockoutduration':
             return '%.1f minutes' % self.nsToMinutes(att.value)
         if aname == 'objectsid':
-            return '<abbr title="%s">%s</abbr>' % (att.value, att.value.split('-')[-1])
+            if isinstance(att.value, bytes) or (isinstance(att.value, str) and '\\x' in repr(att.value)):
+                return 'NOT FOUND!'
+            else:
+                return '<abbr title="%s">%s</abbr>' % (att.value, att.value.split('-')[-1])
         #Special case where the attribute is a CN and it should be made clear its a group
         if aname == 'cn' and formatCnAsGroup:
             return self.formatCnWithGroupLink(att.value)
@@ -744,7 +753,7 @@ class reportWriter():
                     eo.append(self.formatGrepAttribute(entry[attr]) or '')
                 except (LDAPKeyError, LDAPCursorError):
                     eo.append('')
-            out.append(self.config.grepsplitchar.join(eo))
+            out.append(self.config.grepsplitchar.join([str(item) for item in eo if isinstance(item, str)]))
         return '\n'.join(out)
 
     #Convert a list of entities to a JSON string
